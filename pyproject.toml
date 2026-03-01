@@ -1,0 +1,9 @@
+[project]
+name = "gemini-phone-pipecat"
+version = "0.1.0"
+description = "Italian call center voice agent - Pipecat + Telnyx + Gemini Live"
+requires-python = ">=3.10"
+dependencies = [
+    "pipecat-ai[google,websocket,silero,runner]>=0.0.102",
+    "python-dotenv>=1.0.0",
+]
