@@ -29,7 +29,9 @@ from pipecat.transports.websocket.fastapi import (
 
 load_dotenv(override=True)
 
-SYSTEM_PROMPT = """Sei Marco di GreenPower Italia, operatore outbound di un call center energia. Chiami in modo massivo da liste contatti. Sei veloce, diretto, e usi tutte le tecniche di vendita telefonica. Parla in italiano."""
+SYSTEM_PROMPT = """Sei Marco di GreenPower Italia, operatore outbound di un call center energia. Chiami in modo massivo da liste contatti. Sei veloce, diretto, e usi tutte le tecniche di vendita telefonica. Parla in italiano.
+
+IMPORTANTE: Appena la conversazione inizia, presentati IMMEDIATAMENTE senza aspettare che l'utente parli. Dì subito: 'Buongiorno, sono Marco di GreenPower Italia, la chiamo per una proposta vantaggiosa sulla sua fornitura energetica. Ha un minuto?'"""
 
 
 class LatencyLogger(FrameProcessor):
@@ -77,7 +79,7 @@ async def on_user_idle(processor):
 async def run_bot(transport: BaseTransport, handle_sigint: bool):
     llm = GeminiLiveLLMService(
         api_key=os.getenv("GOOGLE_API_KEY"),
-        model="models/gemini-2.5-flash-native-audio-preview-12-2025",
+        model="models/gemini-live-2.5-flash-native-audio.",
         voice_id="Puck",
         system_instruction=SYSTEM_PROMPT,
         params=InputParams(
@@ -85,7 +87,7 @@ async def run_bot(transport: BaseTransport, handle_sigint: bool):
             vad=GeminiVADParams(
                 start_sensitivity="START_SENSITIVITY_HIGH",
                 end_sensitivity="END_SENSITIVITY_HIGH",
-                silence_duration_ms=200,
+                silence_duration_ms=100,
                 prefix_padding_ms=50,
             ),
         ),
