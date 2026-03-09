@@ -11,11 +11,8 @@ from pipecat.processors.user_idle_processor import UserIdleProcessor
 from pipecat.runner.types import RunnerArguments
 from pipecat.runner.utils import parse_telephony_websocket
 from pipecat.serializers.telnyx import TelnyxFrameSerializer
-from pipecat.services.google.gemini_live import (
-    GeminiLiveLLMService,
-    GeminiVADParams,
-    InputParams,
-)
+from pipecat.services.google.gemini_live import GeminiLiveLLMService
+from pipecat.services.google.gemini_live.llm import GeminiVADParams, InputParams
 from pipecat.transcriptions.language import Language
 from pipecat.transports.base_transport import BaseTransport
 from pipecat.transports.websocket.fastapi import (
