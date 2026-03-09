@@ -19,7 +19,6 @@ from pipecat.runner.types import RunnerArguments
 from pipecat.runner.utils import parse_telephony_websocket
 from pipecat.serializers.telnyx import TelnyxFrameSerializer
 from pipecat.services.google.gemini_live.llm_vertex import GeminiLiveVertexLLMService
-from google.genai.types import ProactivityConfig
 from pipecat.services.google.gemini_live.llm import (
     ContextWindowCompressionParams,
     GeminiVADParams,
@@ -103,16 +102,13 @@ async def run_bot(transport: BaseTransport, handle_sigint: bool):
             temperature=0.7,
             language=Language.IT,
             vad=GeminiVADParams(
-                start_sensitivity="START_SENSITIVITY_HIGH",
+                start_sensitivity="START_SENSITIVITY_LOW",
                 end_sensitivity="END_SENSITIVITY_LOW",
-                silence_duration_ms=500,
-                prefix_padding_ms=100,
+                silence_duration_ms=700,
+                prefix_padding_ms=200,
             ),
             context_window_compression=ContextWindowCompressionParams(
                 enabled=True,
-            ),
-            proactivity=ProactivityConfig(
-                proactive_audio=True,
             ),
         ),
     )
