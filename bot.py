@@ -79,7 +79,7 @@ async def on_user_idle(processor):
 async def run_bot(transport: BaseTransport, handle_sigint: bool):
     llm = GeminiLiveLLMService(
         api_key=os.getenv("GOOGLE_API_KEY"),
-        model="models/gemini-live-2.5-flash-native-audio.",
+        model="models/gemini-live-2.5-flash-native-audio",
         voice_id="Puck",
         system_instruction=SYSTEM_PROMPT,
         params=InputParams(
