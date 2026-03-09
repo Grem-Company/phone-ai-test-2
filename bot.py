@@ -104,9 +104,9 @@ async def run_bot(transport: BaseTransport, handle_sigint: bool):
             language=Language.IT,
             vad=GeminiVADParams(
                 start_sensitivity="START_SENSITIVITY_HIGH",
-                end_sensitivity="END_SENSITIVITY_HIGH",
-                silence_duration_ms=100,
-                prefix_padding_ms=50,
+                end_sensitivity="END_SENSITIVITY_LOW",
+                silence_duration_ms=500,
+                prefix_padding_ms=100,
             ),
             context_window_compression=ContextWindowCompressionParams(
                 enabled=True,
@@ -117,7 +117,7 @@ async def run_bot(transport: BaseTransport, handle_sigint: bool):
         ),
     )
 
-    idle = UserIdleProcessor(timeout=1.5, callback=on_user_idle)
+    idle = UserIdleProcessor(timeout=5.0, callback=on_user_idle)
     latency = LatencyLogger()
 
     pipeline = Pipeline(
@@ -141,6 +141,18 @@ async def run_bot(transport: BaseTransport, handle_sigint: bool):
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, client):
         logger.info(f"[LATENCY] Call connected at {time.time():.3f}")
+        await task.queue_frames(
+            [
+                LLMMessagesAppendFrame(
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": "Presentati subito, brevemente.",
+                        }
+                    ]
+                )
+            ]
+        )
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):
