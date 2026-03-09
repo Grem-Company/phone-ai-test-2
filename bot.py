@@ -19,7 +19,12 @@ from pipecat.runner.types import RunnerArguments
 from pipecat.runner.utils import parse_telephony_websocket
 from pipecat.serializers.telnyx import TelnyxFrameSerializer
 from pipecat.services.google.gemini_live.llm_vertex import GeminiLiveVertexLLMService
-from pipecat.services.google.gemini_live.llm import GeminiVADParams, InputParams
+from google.genai.types import ProactivityConfig
+from pipecat.services.google.gemini_live.llm import (
+    ContextWindowCompressionParams,
+    GeminiVADParams,
+    InputParams,
+)
 from pipecat.transcriptions.language import Language
 from pipecat.transports.base_transport import BaseTransport
 from pipecat.transports.websocket.fastapi import (
@@ -29,9 +34,15 @@ from pipecat.transports.websocket.fastapi import (
 
 load_dotenv(override=True)
 
-SYSTEM_PROMPT = """Sei Marco di GreenPower Italia, operatore outbound di un call center energia. Chiami in modo massivo da liste contatti. Sei veloce, diretto, e usi tutte le tecniche di vendita telefonica. Parla in italiano.
+SYSTEM_PROMPT = """YOU MUST RESPOND IN ITALIAN. YOU MUST RESPOND UNMISTAKABLY IN ITALIAN.
 
-IMPORTANTE: Appena la conversazione inizia, presentati IMMEDIATAMENTE senza aspettare che l'utente parli. Dì subito: 'Buongiorno, sono Marco di GreenPower Italia, la chiamo per una proposta vantaggiosa sulla sua fornitura energetica. Ha un minuto?'"""
+Sei Marco di GreenPower Italia, operatore outbound di un call center energia. Chiami in modo massivo da liste contatti. Sei veloce, diretto, e usi tutte le tecniche di vendita telefonica.
+
+REGOLE:
+- Risposte BREVI e DIRETTE, massimo 2 frasi per turno
+- Non fare pause lunghe, rispondi subito
+- Appena la conversazione inizia, presentati IMMEDIATAMENTE senza aspettare che l'utente parli
+- Dì subito: 'Buongiorno, sono Marco di GreenPower Italia, la chiamo per una proposta vantaggiosa sulla sua fornitura energetica. Ha un minuto?'"""
 
 
 class LatencyLogger(FrameProcessor):
@@ -62,17 +73,20 @@ class LatencyLogger(FrameProcessor):
         await self.push_frame(frame, direction)
 
 
+_greeted = False
+
+
 async def on_user_idle(processor):
-    logger.info("User silent for 8s, prompting")
+    global _greeted
+    if not _greeted:
+        logger.info("First idle trigger — forcing greeting")
+        _greeted = True
+        msg = "Presentati subito, brevemente. Sei Marco di GreenPower Italia."
+    else:
+        logger.info("User silent, prompting")
+        msg = "Il cliente è in silenzio, sollecitalo brevemente."
     await processor.push_frame(
-        LLMMessagesAppendFrame(
-            messages=[
-                {
-                    "role": "user",
-                    "content": "Il cliente è in silenzio, sollecitalo brevemente.",
-                }
-            ]
-        )
+        LLMMessagesAppendFrame(messages=[{"role": "user", "content": msg}])
     )
 
 
@@ -84,7 +98,9 @@ async def run_bot(transport: BaseTransport, handle_sigint: bool):
         model="gemini-live-2.5-flash-native-audio",
         voice_id="Puck",
         system_instruction=SYSTEM_PROMPT,
+        inference_on_context_initialization=True,
         params=InputParams(
+            temperature=0.7,
             language=Language.IT,
             vad=GeminiVADParams(
                 start_sensitivity="START_SENSITIVITY_HIGH",
@@ -92,10 +108,16 @@ async def run_bot(transport: BaseTransport, handle_sigint: bool):
                 silence_duration_ms=100,
                 prefix_padding_ms=50,
             ),
+            context_window_compression=ContextWindowCompressionParams(
+                enabled=True,
+            ),
+            proactivity=ProactivityConfig(
+                proactive_audio=True,
+            ),
         ),
     )
 
-    idle = UserIdleProcessor(timeout=8.0, callback=on_user_idle)
+    idle = UserIdleProcessor(timeout=1.5, callback=on_user_idle)
     latency = LatencyLogger()
 
     pipeline = Pipeline(
@@ -118,21 +140,7 @@ async def run_bot(transport: BaseTransport, handle_sigint: bool):
 
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, client):
-        t = time.time()
-        logger.info(f"[LATENCY] Call connected at {t:.3f}")
-        await task.queue_frames(
-            [
-                LLMMessagesAppendFrame(
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": "Presentati subito, brevemente. Sei Marco di GreenPower Italia.",
-                        }
-                    ]
-                )
-            ]
-        )
-        logger.info(f"[LATENCY] Initial prompt queued at {time.time():.3f} (delta {time.time() - t:.3f}s)")
+        logger.info(f"[LATENCY] Call connected at {time.time():.3f}")
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):
