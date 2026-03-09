@@ -18,7 +18,7 @@ from pipecat.processors.user_idle_processor import UserIdleProcessor
 from pipecat.runner.types import RunnerArguments
 from pipecat.runner.utils import parse_telephony_websocket
 from pipecat.serializers.telnyx import TelnyxFrameSerializer
-from pipecat.services.google.gemini_live import GeminiLiveLLMService
+from pipecat.services.google.gemini_live.llm_vertex import GeminiLiveVertexLLMService
 from pipecat.services.google.gemini_live.llm import GeminiVADParams, InputParams
 from pipecat.transcriptions.language import Language
 from pipecat.transports.base_transport import BaseTransport
@@ -77,9 +77,11 @@ async def on_user_idle(processor):
 
 
 async def run_bot(transport: BaseTransport, handle_sigint: bool):
-    llm = GeminiLiveLLMService(
-        api_key=os.getenv("GOOGLE_API_KEY"),
-        model="models/gemini-live-2.5-flash-native-audio",
+    llm = GeminiLiveVertexLLMService(
+        project_id=os.getenv("GOOGLE_CLOUD_PROJECT_ID"),
+        location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1"),
+        credentials=os.getenv("GOOGLE_VERTEX_CREDENTIALS"),
+        model="gemini-live-2.5-flash-native-audio",
         voice_id="Puck",
         system_instruction=SYSTEM_PROMPT,
         params=InputParams(
