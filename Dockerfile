@@ -11,4 +11,4 @@ COPY bot.py .
 
 EXPOSE 7860
 
-CMD ["python", "bot.py", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["python", "bot.py", "--host", "0.0.0.0", "--port", "7860", "--proxy"]
