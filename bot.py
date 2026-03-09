@@ -1,12 +1,19 @@
 import os
+import time
 
 from dotenv import load_dotenv
 from loguru import logger
 
-from pipecat.frames.frames import LLMMessagesAppendFrame
+from pipecat.frames.frames import (
+    LLMMessagesAppendFrame,
+    TranscriptionFrame,
+    TTSStartedFrame,
+    TTSStoppedFrame,
+)
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
+from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.processors.user_idle_processor import UserIdleProcessor
 from pipecat.runner.types import RunnerArguments
 from pipecat.runner.utils import parse_telephony_websocket
@@ -23,6 +30,34 @@ from pipecat.transports.websocket.fastapi import (
 load_dotenv(override=True)
 
 SYSTEM_PROMPT = """Sei Marco di GreenPower Italia, operatore outbound di un call center energia. Chiami in modo massivo da liste contatti. Sei veloce, diretto, e usi tutte le tecniche di vendita telefonica. Parla in italiano."""
+
+
+class LatencyLogger(FrameProcessor):
+    """Logs timestamps for key events to measure latency."""
+
+    def __init__(self):
+        super().__init__()
+        self._user_stop_talking = None
+
+    async def process_frame(self, frame, direction):
+        await super().process_frame(frame, direction)
+
+        if isinstance(frame, TranscriptionFrame):
+            self._user_stop_talking = time.time()
+            logger.info(f"[LATENCY] User said: '{frame.text}' at {self._user_stop_talking:.3f}")
+
+        if isinstance(frame, TTSStartedFrame):
+            now = time.time()
+            if self._user_stop_talking:
+                delta = now - self._user_stop_talking
+                logger.info(f"[LATENCY] Bot starts speaking {delta:.3f}s after user stopped")
+            else:
+                logger.info(f"[LATENCY] Bot starts speaking (first utterance) at {now:.3f}")
+
+        if isinstance(frame, TTSStoppedFrame):
+            logger.info(f"[LATENCY] Bot stopped speaking at {time.time():.3f}")
+
+        await self.push_frame(frame, direction)
 
 
 async def on_user_idle(processor):
@@ -57,11 +92,13 @@ async def run_bot(transport: BaseTransport, handle_sigint: bool):
     )
 
     idle = UserIdleProcessor(timeout=8.0, callback=on_user_idle)
+    latency = LatencyLogger()
 
     pipeline = Pipeline(
         [
             transport.input(),
             idle,
+            latency,
             llm,
             transport.output(),
         ]
@@ -77,19 +114,21 @@ async def run_bot(transport: BaseTransport, handle_sigint: bool):
 
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, client):
-        logger.info("Call connected")
+        t = time.time()
+        logger.info(f"[LATENCY] Call connected at {t:.3f}")
         await task.queue_frames(
             [
                 LLMMessagesAppendFrame(
                     messages=[
                         {
                             "role": "user",
-                            "content": "Hai appena chiamato un cliente, presentati brevemente.",
+                            "content": "Presentati subito, brevemente. Sei Marco di GreenPower Italia.",
                         }
                     ]
                 )
             ]
         )
+        logger.info(f"[LATENCY] Initial prompt queued at {time.time():.3f} (delta {time.time() - t:.3f}s)")
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):
